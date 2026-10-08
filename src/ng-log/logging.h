@@ -890,52 +890,52 @@ namespace nglog {
   nglog::LogMessage(__FILE__, __LINE__, NGLOG_##severity).stream()
 
 #define SOME_KIND_OF_LOG_EVERY_N(severity, n, what_to_do)                  \
-  static std::atomic<int> LOG_OCCURRENCES(0), LOG_OCCURRENCES_MOD_N(0);    \
+  static std::atomic<int> LOG_OCCURRENCES(0);                              \
   NGLOG_IFDEF_THREAD_SANITIZER(AnnotateBenignRaceSized(                    \
       __FILE__, __LINE__, &LOG_OCCURRENCES, sizeof(int), ""));             \
-  NGLOG_IFDEF_THREAD_SANITIZER(AnnotateBenignRaceSized(                    \
-      __FILE__, __LINE__, &LOG_OCCURRENCES_MOD_N, sizeof(int), ""));       \
-  ++LOG_OCCURRENCES;                                                       \
-  if (++LOG_OCCURRENCES_MOD_N > n) LOG_OCCURRENCES_MOD_N -= n;             \
-  if (LOG_OCCURRENCES_MOD_N == 1)                                          \
-  nglog::LogMessage(__FILE__, __LINE__, NGLOG_##severity, LOG_OCCURRENCES, \
-                    &what_to_do)                                           \
+  int LOG_OCCURRENCES_MOD_N =                                              \
+      LOG_OCCURRENCES.fetch_add(1, std::memory_order_relaxed);             \
+  if (LOG_OCCURRENCES_MOD_N % (n) == 0)                                    \
+  nglog::LogMessage(__FILE__, __LINE__, NGLOG_##severity,                  \
+                    LOG_OCCURRENCES_MOD_N + 1, &what_to_do)                \
       .stream()
 
 #define SOME_KIND_OF_LOG_IF_EVERY_N(severity, condition, n, what_to_do)       \
-  static std::atomic<int> LOG_OCCURRENCES(0), LOG_OCCURRENCES_MOD_N(0);       \
+  static std::atomic<int> LOG_OCCURRENCES(0);                                  \
   NGLOG_IFDEF_THREAD_SANITIZER(AnnotateBenignRaceSized(                       \
       __FILE__, __LINE__, &LOG_OCCURRENCES, sizeof(int), ""));                \
-  NGLOG_IFDEF_THREAD_SANITIZER(AnnotateBenignRaceSized(                       \
-      __FILE__, __LINE__, &LOG_OCCURRENCES_MOD_N, sizeof(int), ""));          \
-  ++LOG_OCCURRENCES;                                                          \
+  int LOG_OCCURRENCES_MOD_N = 0;                                              \
   if ((condition) &&                                                          \
-      ((LOG_OCCURRENCES_MOD_N = (LOG_OCCURRENCES_MOD_N + 1) % n) == (1 % n))) \
-  nglog::LogMessage(__FILE__, __LINE__, NGLOG_##severity, LOG_OCCURRENCES,    \
-                    &what_to_do)                                              \
+      (((LOG_OCCURRENCES_MOD_N =                                               \
+             LOG_OCCURRENCES.fetch_add(1, std::memory_order_relaxed)) %       \
+        (n)) == 0))                                                           \
+  nglog::LogMessage(__FILE__, __LINE__, NGLOG_##severity,                     \
+                    LOG_OCCURRENCES_MOD_N + 1, &what_to_do)                  \
       .stream()
 
 #define SOME_KIND_OF_PLOG_EVERY_N(severity, n, what_to_do)              \
-  static std::atomic<int> LOG_OCCURRENCES(0), LOG_OCCURRENCES_MOD_N(0); \
+  static std::atomic<int> LOG_OCCURRENCES(0);                            \
   NGLOG_IFDEF_THREAD_SANITIZER(AnnotateBenignRaceSized(                 \
       __FILE__, __LINE__, &LOG_OCCURRENCES, sizeof(int), ""));          \
-  NGLOG_IFDEF_THREAD_SANITIZER(AnnotateBenignRaceSized(                 \
-      __FILE__, __LINE__, &LOG_OCCURRENCES_MOD_N, sizeof(int), ""));    \
-  ++LOG_OCCURRENCES;                                                    \
-  if (++LOG_OCCURRENCES_MOD_N > n) LOG_OCCURRENCES_MOD_N -= n;          \
-  if (LOG_OCCURRENCES_MOD_N == 1)                                       \
+  int LOG_OCCURRENCES_MOD_N =                                           \
+      LOG_OCCURRENCES.fetch_add(1, std::memory_order_relaxed);          \
+  if (LOG_OCCURRENCES_MOD_N % (n) == 0)                                 \
   nglog::ErrnoLogMessage(__FILE__, __LINE__, NGLOG_##severity,          \
-                         LOG_OCCURRENCES, &what_to_do)                  \
+                         LOG_OCCURRENCES_MOD_N + 1, &what_to_do)       \
       .stream()
 
 #define SOME_KIND_OF_LOG_FIRST_N(severity, n, what_to_do)                  \
   static std::atomic<int> LOG_OCCURRENCES(0);                              \
   NGLOG_IFDEF_THREAD_SANITIZER(AnnotateBenignRaceSized(                    \
       __FILE__, __LINE__, &LOG_OCCURRENCES, sizeof(int), ""));             \
-  if (LOG_OCCURRENCES <= n) ++LOG_OCCURRENCES;                             \
-  if (LOG_OCCURRENCES <= n)                                                \
-  nglog::LogMessage(__FILE__, __LINE__, NGLOG_##severity, LOG_OCCURRENCES, \
-                    &what_to_do)                                           \
+  int LOG_OCCURRENCES_MOD_N =                                              \
+      LOG_OCCURRENCES.load(std::memory_order_relaxed);                     \
+  if (LOG_OCCURRENCES_MOD_N < (n) &&                                       \
+      (LOG_OCCURRENCES_MOD_N =                                             \
+           LOG_OCCURRENCES.fetch_add(1, std::memory_order_relaxed) + 1) <= \
+          (n))                                                             \
+  nglog::LogMessage(__FILE__, __LINE__, NGLOG_##severity,                   \
+                    LOG_OCCURRENCES_MOD_N, &what_to_do)                   \
       .stream()
 
 namespace internal {

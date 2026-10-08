@@ -2810,3 +2810,32 @@ TEST(VLOG, ConcurrentLevelUpdates) {
   SetVLOGLevel("logging_unittest", kInitialLevel);
 }
 #endif
+
+TEST(Logging, MultithreadedOccasionalLogging) {
+  constexpr int kNumThreads = 10;
+  constexpr int kItersPerThread = 200;
+  constexpr int kN = 10;
+  int64 const base_num_infos = LogMessage::num_messages(NGLOG_INFO);
+  int64 const base_num_warnings = LogMessage::num_messages(NGLOG_WARNING);
+
+  std::vector<std::thread> threads;
+  threads.reserve(kNumThreads);
+  for (int i = 0; i < kNumThreads; ++i) {
+    threads.emplace_back([]() {
+      for (int j = 0; j < kItersPerThread; ++j) {
+        LOG_EVERY_N(INFO, kN) << "Multithreaded every n: " << COUNTER;
+        LOG_FIRST_N(WARNING, 5) << "Multithreaded first n: " << COUNTER;
+      }
+    });
+  }
+
+  for (auto& t : threads) {
+    t.join();
+  }
+
+  constexpr int kTotalCalls = kNumThreads * kItersPerThread;
+  constexpr int kExpectedEveryN = kTotalCalls / kN;
+  EXPECT_EQ(base_num_infos + kExpectedEveryN,
+            LogMessage::num_messages(NGLOG_INFO));
+  EXPECT_EQ(base_num_warnings + 5, LogMessage::num_messages(NGLOG_WARNING));
+}
